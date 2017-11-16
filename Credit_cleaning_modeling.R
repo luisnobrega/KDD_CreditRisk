@@ -11,6 +11,7 @@ library(MASS)
 library(caret)
 library(RSNNS)
 library(naivebayes)
+library(ROCR)
 
 
 #load raw data -----------------
@@ -30,69 +31,87 @@ subdata<-treat_data(subtrain, subtest)
 train <- subdata$tr
 test <-subdata$te
 
-train_small <- train[1:50000,]
 
 #glm---------------------------------------
 model <- glm(IND_BOM ~., family=binomial(link='logit'), data=train)
 #prediction
-prediction <- predict(model,test,type="response")
+prediction_model <- predict(model,test,type="response")
 my_submission <- subtest[c("ID", "IND_BOM")]
 my_submission[,2]<-'NA'
-my_submission[c("IND_BOM")] <- ifelse(prediction > 0.5,1,0)
+my_submission[c("IND_BOM")] <- ifelse(prediction_model > 0.5,1,0)
+
+errors = error(my_submission,subtest)
+print(errors)
+
+pred_glm<- prediction(prediction_model, subtest[,23])
+perf_glm<-performance(pred_glm, "tpr", "fpr")
+#png(filename = "roc_compartive.png")
+#plot(perf_glm, main="ic", col="blue", lwd=3)
+perf.auc <- performance(pred_glm, measure = "auc")
+unlist(perf.auc@y.values)
 
 
-datax <- aggregate(IND_BOM ~  VPDCS0037, FUN=mean, data=train)
-plot(datax)
+#false_data<-my_submission[2]-subtest[23]
+#FN <- sum(false_data == -1)
+#FP <- sum(false_data == 1)
 
+#true_data<-my_submission[2]+subtest[23]
+#TP<-sum(true_data==2)
+#TN<-sum(true_data==0)
+
+#TP+TN+FN+FP
+
+#datax <- aggregate(IND_BOM ~  VPDCS0037, FUN=mean, data=train)
+#plot(datax)
 
 
 #LDA-------------
-model<-lda(IND_BOM ~ ., data = train)
+#model<-lda(IND_BOM ~ ., data = train)
 #prediction
-prediction <- predict(model, test)
-my_submission <- subtest[c("ID", "IND_BOM")]
-my_submission[,2]<-'NA'
-my_submission[c("IND_BOM")] <- as.numeric(levels(prediction$class))[prediction$class]
+#prediction <- predict(model, test)
+#my_submission <- subtest[c("ID", "IND_BOM")]
+#my_submission[,2]<-'NA'
+#my_submission[c("IND_BOM")] <- as.numeric(levels(prediction$class))[prediction$class]
 
-errors = error(my_submission, subtest)
-errors
+#errors = error(my_submission, subtest)
+#errors
 
 
 
 #PLSDA-------------
-model<-plsda(train[,1:12], as.factor(train[,13]), probMethod = "Bayes")
+#model<-plsda(train[,1:12], as.factor(train[,13]), probMethod = "Bayes")
 #prediction
-prediction <- predict(model, test)
-my_submission <- subtest[c("ID", "IND_BOM")]
-my_submission[,2]<-'NA'
-my_submission[c("IND_BOM")] <- as.numeric(levels(prediction))[prediction]
+#prediction <- predict(model, test)
+#my_submission <- subtest[c("ID", "IND_BOM")]
+#my_submission[,2]<-'NA'
+#my_submission[c("IND_BOM")] <- as.numeric(levels(prediction))[prediction]
 
-errors = error(my_submission, subtest)
-errors
+#errors = error(my_submission, subtest)
+#errors
 
 
 
 #SVM-------------
-model<-svm(as.factor(IND_BOM) ~ ., data = train_small)
+#model<-svm(as.factor(IND_BOM) ~ ., data = train_small)
 #prediction
-prediction <- predict(object=model, newdata=test)
-my_submission <- test_data[c("ID", "IND_BOM")]
-my_submission[,2]<-'NA'
-my_submission[c("IND_BOM")] <- prediction
+#prediction <- predict(object=model, newdata=test)
+#my_submission <- test_data[c("ID", "IND_BOM")]
+#my_submission[,2]<-'NA'
+#my_submission[c("IND_BOM")] <- prediction
 
-errors = error(my_submission,subtest)
-errors
+#errors = error(my_submission,subtest)
+#errors
 
 #naivebayes -------
-model<- naive_bayes(as.factor(IND_BOM) ~., data = train)
-prediction <- predict(model,test,type="prob")
-my_submission <- subtest[c("ID", "IND_BOM")]
-my_submission[,2]<-'NA'
-my_submission[c("IND_BOM")] <- prediction
+#model<- naive_bayes(as.factor(IND_BOM) ~., data = train)
+#prediction <- predict(model,test,type="prob")
+#my_submission <- subtest[c("ID", "IND_BOM")]
+#my_submission[,2]<-'NA'
+#my_submission[c("IND_BOM")] <- prediction
 
 
-errors = error(my_submission,subtest)
-errors
+#errors = error(my_submission,subtest)
+#errors
 
 #randomForest---------------
 model <- randomForest(as.factor(IND_BOM) ~., data = train_small, importance = TRUE, proximity=TRUE, ntree=500, keep.forest=TRUE)
@@ -108,36 +127,36 @@ errors
 
 
 #decision trees -------
-png(file = "decision_tree.png")
-output.tree <-ctree(
-  IND_BOM ~ OPERACAO + VP157 + VP184,
-  data = train)
 
-plot (output.tree)
-dev.off()
-
-#classification trees-------------
-
-
-#while (i_vcp<=0.01) {
-  model = rpart(IND_BOM ~., data = train, control = rpart.control(cp=0.00008165, xval=10, maxdepth=30))
+  model = rpart(IND_BOM ~., data = train, control = rpart.control(cp=0.00008369587, xval=30, maxdepth=30))
+  #png(filename = "trees.png", height = 1000, width = 4000, res = 500)
   #fancyRpartPlot(model)
+  #line(perf_glm, col="green", lwd=3)
+  #dev.off()
   #plot(model, margin=0.05, compress=TRUE, main="Decision Tree")
-  prediction <- predict(model, test) 
+  prediction_model <- predict(model, test) 
   my_submission <- subtest[c("ID", "IND_BOM")]
   my_submission[,2]<-'NA'
-  my_submission[c("IND_BOM")] <- ifelse(prediction > 0.5,1,0)
-
+  my_submission[c("IND_BOM")] <- ifelse(prediction_model > 0.5,1,0)
+  
   errors = error(my_submission,subtest)
   print(errors)
-
   
-#}
-
+  pred_rpart<- prediction(prediction_model, subtest[,23])
+  perf_rpart<-performance(pred_rpart, "tpr", "fpr")
+  png(filename = "roc.png")
+  plot(perf_glm, main="ic", colorize = TRUE,lwd=3)
+  plot(perf_rpart, add="TRUE",colorize = TRUE, lwd=3)
+  dev.off()
+  perf.auc <- performance(pred_rpart, measure = "auc")
+  unlist(perf.auc@y.values)
 
 summary(model)
+plotcp(model)
 
 write.csv(my_submission, file ="my_submission.csv", row.names = FALSE)
+write.csv(subtest, file ="subtest.csv", row.names = FALSE)
+write.csv(my_submission, file ="glm.csv", row.names = FALSE)
 
 
 ###########function -------
@@ -258,7 +277,7 @@ temp <- temp[!(temp$VP142 %in% b$Var1), ]
 #clean_test<-swap (clean_test, grep("VP119", colnames(clean_test)), -2,-1)
 
 
-list(tr=temp, te=clean_test)
+list(tr=clean_train, te=clean_test)
 }
 
 discret <-function (data, attribute, x11, x12, x21, x22){
@@ -284,14 +303,4 @@ swap <- function (data,attribute, x1, x2){
   return (data)
 }
 
-
-t <- train[-(which(train$VP134==-1)),]
-ggplot(train, aes(x=VP142, fill = factor(IND_BOM)))+
-  stat_count(width=0.5)+
-  xlab("VP142") +
-  ylab ("Total Count") +
-  labs(fill = "Credit BOM")
-
-datax <- aggregate(IND_BOM ~ VP142, FUN=mean, data=train)
-plot(datax)
 
